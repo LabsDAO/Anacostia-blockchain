@@ -1,4 +1,4 @@
-# Anacostia
+# Anacostia-Blockchain
 Welcome to Anacostia. Anacostia is a framework for creating machine learning operations (MLOps) pipelines. I believe the process of creating MLOps pipelines today are too difficult; thus, this is my attempt at simplifying the entire process. 
 
 ## Notes for contributors and developers
