@@ -7,6 +7,7 @@ from typing import List
 import json
 import requests
 import time
+from web3 import Web3
 from dotenv import load_dotenv
 
 from anacostia_pipeline.engine.base import BaseNode, BaseActionNode, BaseMetadataStoreNode
@@ -165,44 +166,59 @@ class HaikuEvalNode(BaseActionNode):
         self.log("Evaluating LLM on Haiku validation dataset", level="INFO")
         self.metadata_store.log_metrics(haiku_test_loss=2.43)
         return True
-
-
-class IpfsUpload(BaseActionNode):
+class BlockchainNode(BaseActionNode):
     def __init__(
-        self, name: str, predecessors: List[BaseNode], metadata_store: MetadataStore, loggers: Logger | List[Logger] = None
-    ) -> None: 
+        self, name: str, predecessors: List[BaseNode], metadata_store: MetadataStore,
+        contract_address: str, contract_abi: list, web3_provider: str,
+        account_address: str, private_key: str, loggers: Logger | List[Logger] = None
+    ) -> None:
         super().__init__(name, predecessors, loggers)
         self.metadata_store = metadata_store
         self.temp_dir = self.metadata_store.temp_dir
-        self.api_key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkaWQ6ZXRocjoweDQxNzNjMUI0ODczZGM5RGY0NkVFZjQ1ZWQ1ZTIxZDliMzFjNTY0RUYiLCJpc3MiOiJuZnQtc3RvcmFnZSIsImlhdCI6MTcwNjQ3MDI3ODIxMCwibmFtZSI6IldpbnRlcnNHYXJkZW5Db2xsZWN0aW9uIn0.bAhskZsIg3i0-1LT-OJ9nsxtIaWY_3VmKqlNE9BvsOs'  # Replace with your actual NFT.Storage API key
+        self.web3 = Web3(Web3.HTTPProvider(web3_provider))
+        self.account_address = account_address
+        self.private_key = private_key
+        self.contract_address = self.web3.eth.contract(address=contract_address, abi=contract_abi)
 
     def execute(self, *args, **kwargs) -> bool:
         url = 'https://api.nft.storage/upload'
 
-        self.metadata_store.get_runs_json(path=f"{self.metadata_store.temp_dir}/filename1.json")
+        api_key = os.getenv('NFT_STORAGE_API_KEY')
+        if not api_key:
+            raise Exception("NFT_STORAGE_API_KEY is not set in the environment variables.")
 
+        # Uploading metadata to IPFS as before
+        self.metadata_store.get_runs_json(path=f"{self.metadata_store.temp_dir}/filename1.json")
         time.sleep(1)
 
-        # Open the file in binary mode
         with open(f"{self.temp_dir}/filename1.json", 'rb') as file:
-            headers = {
-                'Authorization': f'Bearer {self.api_key}',
-                'Content-Type': 'application/octet-stream'
-            }
-            # Make the POST request to upload the file within the 'with' block
+            headers = {'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/octet-stream'}
             response = requests.post(url, headers=headers, data=file)
-
-        # The rest of the code remains outside of the 'with' block
-        print("running")
-        if response.status_code == 200:
-            ipfs_hash = response.json()['value']['cid']
-            print(f'File uploaded to NFT.Storage with hash: {ipfs_hash}')
-            return True  # Return True if the upload was successful
-        else:
-            print(f'Error uploading file: {response.text}')
-            return False
-
-
+            if response.status_code == 200:
+                ipfs_hash = response.json()['value']['cid']
+                print(f'File uploaded to NFT.Storage with hash: {ipfs_hash}')
+                
+                # Minting NFT with the received IPFS hash
+                token_id = 1  # Assuming you want to mint MLOPs_NFT1; change as needed
+                mint_amount = 1  # Change as needed
+                nonce = self.web3.eth.getTransactionCount(self.account_address)
+                txn = self.contract.functions.mint(
+                    self.account_address, token_id, mint_amount
+                ).buildTransaction({
+                    'chainId': 137,  # For Polygon Mainnet; change according to your target network
+                    'gas': 2000000,
+                    'gasPrice': self.web3.toWei('50', 'gwei'),
+                    'nonce': nonce,
+                    'value': self.web3.toWei(0.006, 'ether')  # Mint price per NFT
+                })
+                signed_txn = self.web3.eth.account.signTransaction(txn, private_key=self.private_key)
+                txn_hash = self.web3.eth.sendRawTransaction(signed_txn.rawTransaction)
+                txn_receipt = self.web3.eth.waitForTransactionReceipt(txn_hash)
+                print(f'NFT minted successfully with transaction hash: {txn_receipt.transactionHash.hex()}')
+                return True
+            else:
+                print(f'Error uploading file: {response.text}')
+                return False
 
 
 
@@ -244,9 +260,31 @@ haiku_data_store = MonitoringDataStoreNode("haiku_data_store", haiku_data_store_
 retraining = ModelRetrainingNode("retraining", haiku_data_store, plots_store, model_registry, metadata_store)
 shakespeare_eval = ShakespeareEvalNode("shakespeare_eval", predecessors=[retraining], metadata_store=metadata_store)
 haiku_eval = HaikuEvalNode("haiku_eval", predecessors=[retraining], metadata_store=metadata_store)
-IpfsUploadnode = IpfsUpload("Ipfsnode", predecessors=[shakespeare_eval,haiku_eval], metadata_store=metadata_store)
+
+# Blockchain node variables
+contract_address = os.getenv("CONTRACT_ADDRESS")  # Replace ... with the actual value of contract_address
+contract_abi = os.getenv("CONTRACT_ABI")  # Replace ... with the actual value of contract_abi
+web3_provider = os.getenv("WEB3_PROVIDER_URI_MUMBAI")  # Replace with the actual web3 provider URL
+account_address = os.getenv("ACCOUNT_ADDRESS")  # Replace with the actual account address
+private_key= os.getenv("PRIVATE_KEY")  # Replace with the actual private key
+
+# Load the contract ABI
+with open('../artifacts/contracts/MLOpsNFT.sol/MLOpsNFT.json', 'r') as abi_file:
+    contract_abi = json.load(abi_file)["abi"]
+
+blockchain_node = BlockchainNode(
+    "blockchain_node",
+    predecessors=[haiku_eval, shakespeare_eval],
+    metadata_store=metadata_store,
+    contract_address=contract_address,
+    contract_abi=contract_abi,
+    web3_provider=web3_provider,
+    account_address=account_address,
+    private_key=private_key
+)
+
 pipeline = Pipeline(
-    nodes=[metadata_store, haiku_data_store, model_registry, plots_store, shakespeare_eval, haiku_eval, retraining,IpfsUploadnode],
+    nodes=[metadata_store, haiku_data_store, model_registry, plots_store, shakespeare_eval, haiku_eval, retraining,blockchain_node],
     loggers=logger
 )
 
