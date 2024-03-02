@@ -37,8 +37,6 @@ pip install anacostia-blockchain
 Example Usage
 Below is an example demonstrating how to set up a simple MLOps pipeline with Anacostia-Blockchain, including steps for model evaluation and leveraging blockchain for enhanced data integrity and model management.
 
-python
-Copy code
 # Import pipeline and node classes
 from anacostia_blockchain.pipeline import Pipeline
 from anacostia_blockchain.nodes import MonitoringDataStoreNode, ShakespeareEvalNode
