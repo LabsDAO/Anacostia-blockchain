@@ -174,29 +174,27 @@ class IpfsUpload(BaseActionNode):
         super().__init__(name, predecessors, loggers)
         self.metadata_store = metadata_store
         self.temp_dir = self.metadata_store.temp_dir
-        self.api_key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkaWQ6ZXRocjoweDQxNzNjMUI0ODczZGM5RGY0NkVFZjQ1ZWQ1ZTIxZDliMzFjNTY0RUYiLCJpc3MiOiJuZnQtc3RvcmFnZSIsImlhdCI6MTcwNjQ3MDI3ODIxMCwibmFtZSI6IldpbnRlcnNHYXJkZW5Db2xsZWN0aW9uIn0.bAhskZsIg3i0-1LT-OJ9nsxtIaWY_3VmKqlNE9BvsOs'  # Replace with your actual NFT.Storage API key
+        self.api_key = 'QN_f3860eefca4341f1a71e1cc7ee2c2604'  # Replace with your actual QuickNode API key
 
     def execute(self, *args, **kwargs) -> bool:
-        url = 'https://api.nft.storage/upload'
+        url = 'https://api.quicknode.com/ipfs/rest/v1/s3/put-object'
+        filename = 'filename1.json'  # Adjust the filename as needed
+        file_path = f"{self.temp_dir}/{filename}"
+        content_type = 'application/json'  # Adjust the content type according to your file
 
-        self.metadata_store.get_runs_json(path=f"{self.metadata_store.temp_dir}/filename1.json")
+        self.metadata_store.get_runs_json(path=file_path)
 
         time.sleep(1)
 
-        # Open the file in binary mode
-        with open(f"{self.temp_dir}/filename1.json", 'rb') as file:
-            headers = {
-                'Authorization': f'Bearer {self.api_key}',
-                'Content-Type': 'application/octet-stream'
-            }
-            # Make the POST request to upload the file within the 'with' block
-            response = requests.post(url, headers=headers, data=file)
+        payload = {'Key': filename, 'ContentType': content_type}
+        files = [('Body', (filename, open(file_path, 'rb'), content_type))]
+        headers = {'x-api-key': self.api_key}
 
-        # The rest of the code remains outside of the 'with' block
-        print("running")
+        response = requests.request("POST", url, headers=headers, data=payload, files=files)
+
         if response.status_code == 200:
-            ipfs_hash = response.json()['value']['cid']
-            print(f'File uploaded to NFT.Storage with hash: {ipfs_hash}')
+            ipfs_hash = response.json()['ipfs_hash']
+            print(f'File uploaded to QuickNode IPFS with hash: {ipfs_hash}')
             return True  # Return True if the upload was successful
         else:
             print(f'Error uploading file: {response.text}')
