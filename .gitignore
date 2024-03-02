@@ -1,0 +1,14 @@
+__pycache__/
+virtualenv/
+tests/testing_artifacts/
+*.egg-info/
+.vscode/
+anacostia_pipeline/engine/subexample.py
+testing_artifacts/
+anacostia_pipeline/static/js/htmx.js
+.env
+venv
+.venv
+virtualenvtest
+*/plugin-venv
+dist/
