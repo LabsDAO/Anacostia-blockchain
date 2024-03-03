@@ -64,11 +64,12 @@ By integrating these core components, Anacostia-Blockchain delivers a comprehens
 Make sure you're running Python 3.11 or later. See `CONTRIBUTORS.md` for guidance on updating Python.
 
 ```bash
-pip install anacostia-blockchain
+pip install anacostia-pipeline
+```
 
 Example Usage
 Below is an example demonstrating how to set up a simple MLOps pipeline with Anacostia-Blockchain, including steps for model evaluation and leveraging blockchain for enhanced data integrity and model management.
-
+```python
 # Import pipeline and node classes
 from anacostia_blockchain.pipeline import Pipeline
 from anacostia_blockchain.nodes import MonitoringDataStoreNode, ShakespeareEvalNode
@@ -84,3 +85,4 @@ if __name__ == "__main__":
     # Define and execute the pipeline, integrating blockchain functionalities
     pipeline = Pipeline(nodes=[metadata_store, data_store, eval_node])
     pipeline.execute()
+```
