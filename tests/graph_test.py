@@ -178,47 +178,54 @@ class BlockchainNode(BaseActionNode):
         self.web3 = Web3(Web3.HTTPProvider(web3_provider))
         self.account_address = account_address
         self.private_key = private_key
-        self.contract_address = self.web3.eth.contract(address=contract_address, abi=contract_abi)
+        self.contract = self.web3.eth.contract(address=contract_address, abi=contract_abi)
+        self.api_key = 'QN_f3860eefca4341f1a71e1cc7ee2c2604'  # Replace with your actual QuickNode API key
 
     def execute(self, *args, **kwargs) -> bool:
-        url = 'https://api.nft.storage/upload'
+        url = 'https://api.quicknode.com/ipfs/rest/v1/s3/put-object'
+        filename = 'filename1.json'
+        file_path = f"{self.temp_dir}/{filename}"
+        content_type = 'application/json'
 
-        api_key = os.getenv('NFT_STORAGE_API_KEY')
-        if not api_key:
-            raise Exception("NFT_STORAGE_API_KEY is not set in the environment variables.")
+        if not self.api_key:
+            raise Exception("QuickNode API key is not set.")
 
-        # Uploading metadata to IPFS as before
-        self.metadata_store.get_runs_json(path=f"{self.metadata_store.temp_dir}/filename1.json")
+        # Uploading metadata to IPFS
+        self.metadata_store.get_runs_json(path=file_path)
         time.sleep(1)
 
-        with open(f"{self.temp_dir}/filename1.json", 'rb') as file:
-            headers = {'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/octet-stream'}
-            response = requests.post(url, headers=headers, data=file)
-            if response.status_code == 200:
-                ipfs_hash = response.json()['value']['cid']
-                print(f'File uploaded to NFT.Storage with hash: {ipfs_hash}')
-                
-                # Minting NFT with the received IPFS hash
-                token_id = 1  # Assuming you want to mint MLOPs_NFT1; change as needed
-                mint_amount = 1  # Change as needed
-                nonce = self.web3.eth.getTransactionCount(self.account_address)
-                txn = self.contract.functions.mint(
-                    self.account_address, token_id, mint_amount
-                ).buildTransaction({
-                    'chainId': 137,  # For Polygon Mainnet; change according to your target network
-                    'gas': 2000000,
-                    'gasPrice': self.web3.toWei('50', 'gwei'),
-                    'nonce': nonce,
-                    'value': self.web3.toWei(0.006, 'ether')  # Mint price per NFT
-                })
-                signed_txn = self.web3.eth.account.signTransaction(txn, private_key=self.private_key)
-                txn_hash = self.web3.eth.sendRawTransaction(signed_txn.rawTransaction)
-                txn_receipt = self.web3.eth.waitForTransactionReceipt(txn_hash)
-                print(f'NFT minted successfully with transaction hash: {txn_receipt.transactionHash.hex()}')
-                return True
-            else:
-                print(f'Error uploading file: {response.text}')
-                return False
+        payload = {'Key': filename, 'ContentType': content_type}
+        files = [('Body', (filename, open(file_path, 'rb'), content_type))]
+        headers = {'x-api-key': self.api_key}
+
+        response = requests.request("POST", url, headers=headers, data=payload, files=files)
+
+        if response.status_code == 200:
+            ipfs_hash = response.json()['ipfs_hash']
+            print(f'File uploaded to QuickNode IPFS with hash: {ipfs_hash}')
+            
+            # Minting NFT with the received IPFS hash
+            token_id = 1  # Assuming you want to mint MLOPs_NFT1; change as needed
+            mint_amount = 1  # Change as needed
+            nonce = self.web3.eth.getTransactionCount(self.account_address)
+            txn = self.contract.functions.mint(
+                self.account_address, token_id, mint_amount
+            ).buildTransaction({
+                'chainId': 137,  # For Polygon Mainnet; change according to your target network
+                'gas': 2000000,
+                'gasPrice': self.web3.toWei('50', 'gwei'),
+                'nonce': nonce,
+                'value': self.web3.toWei(0.006, 'ether')  # Mint price per NFT
+            })
+            signed_txn = self.web3.eth.account.signTransaction(txn, private_key=self.private_key)
+            txn_hash = self.web3.eth.sendRawTransaction(signed_txn.rawTransaction)
+            txn_receipt = self.web3.eth.waitForTransactionReceipt(txn_hash)
+            print(f'NFT minted successfully with transaction hash: {txn_receipt.transactionHash.hex()}')
+            return True
+        else:
+            print(f'Error uploading file: {response.text}')
+            return False
+
 
 
 
